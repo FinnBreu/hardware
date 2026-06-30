@@ -17,21 +17,38 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 
 import rclpy
+import time
 from rclpy.node import Node
 from serial import Serial
 from serial.serialutil import SerialException
-from std_srvs.srv import Trigger, Trigger_Request, Trigger_Response
+from std_srvs.srv import (
+    SetBool,
+    SetBool_Request,
+    SetBool_Response,
+    Trigger,
+    Trigger_Request,
+    Trigger_Response,
+)
 
 
 class NSHNode(Node):
     def __init__(self):
         super().__init__(node_name='nsh_node')
         self.serial_port: Serial = None
+        self.declare_parameter('offboard_after_reboot_delay', 8.0)
+        self.offboard_after_reboot_delay = self.get_parameter(
+            'offboard_after_reboot_delay'
+        ).get_parameter_value().double_value
+        self.offboard_after_reboot_timer = None
+        self.arm_service = self.create_service(SetBool, 'arm', self.serve_arm)
         self.ekf2_restart_service = self.create_service(
             Trigger, 'ekf2_restart', self.serve_ekf2_restart
         )
         self.fcu_reboot_service = self.create_service(
             Trigger, 'fcu_reboot', self.serve_fcu_reboot
+        )
+        self.force_disarm_service = self.create_service(
+            Trigger, 'force_disarm', self.serve_force_disarm
         )
         self.get_logger().info('Started.')
 
@@ -43,34 +60,117 @@ class NSHNode(Node):
             return False
         return True
 
-    def serve_fcu_reboot(self, _: Trigger_Request, response: Trigger_Response):
+    def write_nsh_command(self, command: bytes):
         if self.serial_port is None:
             self.open_serial_port()
         if self.serial_port is None:
+            return False
+        self.serial_port.write(command)
+        self.serial_port.flush()
+        return True
+
+    def clear_serial_input(self):
+        if self.serial_port is not None:
+            self.serial_port.reset_input_buffer()
+
+    def read_nsh_response(self, timeout_sec=2.0, idle_sec=0.3):
+        chunks = []
+        deadline = time.monotonic() + timeout_sec
+        last_data_time = None
+        while time.monotonic() < deadline:
+            chunk = self.serial_port.read(1024)
+            if chunk:
+                chunks.append(chunk)
+                last_data_time = time.monotonic()
+                continue
+            if last_data_time is not None and time.monotonic() - last_data_time > idle_sec:
+                break
+        text = b''.join(chunks).decode(errors='replace')
+        return '\n'.join(line.strip() for line in text.splitlines() if line.strip())
+
+    def write_nsh_command_with_response(self, command: bytes, timeout_sec=2.0):
+        if self.serial_port is None:
+            self.open_serial_port()
+        if self.serial_port is None:
+            return False, 'Serial port not available'
+        self.clear_serial_input()
+        self.serial_port.write(command)
+        self.serial_port.flush()
+        return True, self.read_nsh_response(timeout_sec=timeout_sec)
+
+    def serve_arm(self, request: SetBool_Request, response: SetBool_Response):
+        command = b'commander arm\r' if request.data else b'commander disarm\r'
+        action = 'Armed' if request.data else 'Disarmed'
+        success, shell_response = self.write_nsh_command_with_response(command)
+        if not success:
+            response.success = False
+            response.message = shell_response
+            return response
+        response.success = 'denied' not in shell_response.lower()
+        if shell_response:
+            response.message = shell_response
+        else:
+            response.message = f'{action} command sent, no shell response received.'
+        return response
+
+    def serve_fcu_reboot(self, _: Trigger_Request, response: Trigger_Response):
+        if not self.write_nsh_command(b'reboot\r'):
             response.success = False
             response.message = 'Serial port not available'
             return response
-        self.serial_port.write(b'reboot\r')
-        self.serial_port.flush()
+        self.schedule_offboard_after_reboot()
         response.success = True
-        response.message = 'Rebooted FCU.'
+        response.message = 'Rebooted FCU. Offboard mode command scheduled.'
+        return response
+
+    def schedule_offboard_after_reboot(self):
+        if self.offboard_after_reboot_timer is not None:
+            self.offboard_after_reboot_timer.cancel()
+            self.destroy_timer(self.offboard_after_reboot_timer)
+        self.offboard_after_reboot_timer = self.create_timer(
+            self.offboard_after_reboot_delay, self.send_offboard_after_reboot
+        )
+
+    def send_offboard_after_reboot(self):
+        if self.offboard_after_reboot_timer is not None:
+            self.offboard_after_reboot_timer.cancel()
+            self.destroy_timer(self.offboard_after_reboot_timer)
+            self.offboard_after_reboot_timer = None
+
+        if self.serial_port is not None:
+            try:
+                self.serial_port.close()
+            except SerialException:
+                pass
+            self.serial_port = None
+
+        if not self.open_serial_port():
+            self.get_logger().error(
+                'Could not set offboard mode after reboot: serial port not available.'
+            )
+            return
+
+        self.serial_port.write(b'commander mode offboard\r')
+        self.serial_port.flush()
+        self.get_logger().info('Sent offboard mode command after FCU reboot.')
+
+    def serve_force_disarm(self, _: Trigger_Request, response: Trigger_Response):
+        if not self.write_nsh_command(b'commander disarm -f\r'):
+            response.success = False
+            response.message = 'Serial port not available'
+            return response
+        response.success = True
+        response.message = 'Force-disarmed FCU.'
         return response
 
     def serve_ekf2_restart(
         self, _: Trigger_Request, response: Trigger_Response
     ):
-        if self.serial_port is None:
-            self.open_serial_port()
-
-        if self.serial_port is None:
+        if not self.write_nsh_command(b'ekf2 stop\r'):
             response.success = False
             response.message = 'Serial port not available'
             return response
-
-        self.serial_port.write(b'ekf2 stop\r')
-        self.serial_port.flush()
-        self.serial_port.write(b'ekf2 start\r')
-        self.serial_port.flush()
+        self.write_nsh_command(b'ekf2 start\r')
         response.success = True
         response.message = 'Restarted EKF2'
         return response
