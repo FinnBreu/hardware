@@ -40,7 +40,9 @@ class NSHNode(Node):
             'offboard_after_reboot_delay'
         ).get_parameter_value().double_value
         self.offboard_after_reboot_timer = None
-        self.arm_service = self.create_service(SetBool, 'arm', self.serve_arm)
+        self.fcu_arm_service = self.create_service(
+            SetBool, 'fcu_arm', self.serve_fcu_arm
+        )
         self.ekf2_restart_service = self.create_service(
             Trigger, 'ekf2_restart', self.serve_ekf2_restart
         )
@@ -98,7 +100,7 @@ class NSHNode(Node):
         self.serial_port.flush()
         return True, self.read_nsh_response(timeout_sec=timeout_sec)
 
-    def serve_arm(self, request: SetBool_Request, response: SetBool_Response):
+    def serve_fcu_arm(self, request: SetBool_Request, response: SetBool_Response):
         command = b'commander arm\r' if request.data else b'commander disarm\r'
         action = 'Armed' if request.data else 'Disarmed'
         success, shell_response = self.write_nsh_command_with_response(command)
@@ -109,8 +111,13 @@ class NSHNode(Node):
         response.success = 'denied' not in shell_response.lower()
         if shell_response:
             response.message = shell_response
+            if response.success:
+                self.get_logger().info(shell_response)
+            else:
+                self.get_logger().warn(shell_response)
         else:
             response.message = f'{action} command sent, no shell response received.'
+            self.get_logger().warn(response.message)
         return response
 
     def serve_fcu_reboot(self, _: Trigger_Request, response: Trigger_Response):
@@ -161,6 +168,7 @@ class NSHNode(Node):
             return response
         response.success = True
         response.message = 'Force-disarmed FCU.'
+        self.get_logger().warn(response.message)
         return response
 
     def serve_ekf2_restart(
