@@ -1,0 +1,4 @@
+/**:
+  ros__parameters:
+    device: /dev/i2c-1
+    update_period_ms: 40

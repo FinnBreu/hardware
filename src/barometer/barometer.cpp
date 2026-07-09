@@ -27,6 +27,12 @@ Barometer::Barometer(rclcpp::NodeOptions const &_options)
   InitTimers();
 }
 
+void Barometer::InitParams() {
+  params_.device = declare_parameter<std::string>("device", params_.device);
+  params_.update_period_ms =
+      declare_parameter<int>("update_period_ms", params_.update_period_ms);
+}
+
 void Barometer::InitPublishers() {
   std::string topic;
   rclcpp::QoS qos = rclcpp::SensorDataQoS();
@@ -61,7 +67,7 @@ void Barometer::OnReadTimer() {
     barometer_initialized_ = true;
   }
 
-  MS5837::Status status = barometer_.Read(MS5837::Oversampling::k2048);
+  MS5837::Status status = barometer_.Read(MS5837::Oversampling::k8192);
   if (status != MS5837::Status::kOk) {
     RCLCPP_ERROR(get_logger(), "Failed to read sensor.");
     barometer_initialized_ = false;

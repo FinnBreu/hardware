@@ -30,8 +30,8 @@ class Barometer : public rclcpp::Node {
 
  private:
   struct Params {
-    std::string device;
-    int update_period_ms;
+    std::string device{"/dev/i2c-1"};
+    int update_period_ms{40};
   };
   void InitPublishers();
   void InitTimers();
