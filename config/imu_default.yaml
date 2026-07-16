@@ -1,0 +1,13 @@
+/**:
+  ros__parameters:
+    i2c_bus: /dev/i2c-6
+    i2c_address: 0x6a
+    frame_id: imu_link
+    topic: imu/data
+    publish_rate_hz: 104.0
+    accel_range_g: 4.0
+    gyro_range_dps: 500.0
+    accel_stddev: 0.05
+    gyro_stddev: 0.005
+    check_who_am_i: true
+    expected_who_am_i: [0x6a, 0x6b, 0x6c]

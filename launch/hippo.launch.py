@@ -5,6 +5,7 @@ from hippo_common.launch_helper import (
     launch_file_source,
 )
 from launch_ros.actions import Node, PushROSNamespace
+from launch_ros.substitutions import FindPackageShare
 
 from launch import LaunchDescription
 from launch.actions import (
@@ -13,7 +14,9 @@ from launch.actions import (
     GroupAction,
     IncludeLaunchDescription,
 )
-from launch.substitutions import LaunchConfiguration
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import PythonExpression
 
 
 def declare_launch_args(launch_description: LaunchDescription):
@@ -25,6 +28,20 @@ def declare_launch_args(launch_description: LaunchDescription):
         pkg, 'actuator_mixer/hippocampus_normalized_default.yaml'
     )
     action = DeclareLaunchArgument('mixer_path', default_value=config_file)
+    launch_description.add_action(action)
+    action = DeclareLaunchArgument(
+        'imu_source',
+        default_value='ism330',
+        choices=['ism330', 'pixhawk', 'none'],
+        description='IMU source to launch.',
+    )
+    launch_description.add_action(action)
+    action = DeclareLaunchArgument(
+        'use_pixhawk',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Launch Pixhawk/FCU serial bridge processes.',
+    )
     launch_description.add_action(action)
 
 
@@ -63,6 +80,7 @@ def add_micro_xrce_agent():
         ],
         output='screen',
         emulate_tty=True,
+        condition=IfCondition(LaunchConfiguration('use_pixhawk')),
     )
     return action
 
@@ -71,6 +89,67 @@ def add_nsh_node():
     return Node(
         executable='nsh_node',
         package='hardware',
+        condition=IfCondition(LaunchConfiguration('use_pixhawk')),
+    )
+
+
+def add_barometer_node():
+    config_file = PathJoinSubstitution(
+        [
+            FindPackageShare('hardware'),
+            'config',
+            'barometer_default.yaml',
+        ]
+    )
+    return Node(
+        executable='barometer',
+        package='hardware',
+        parameters=[config_file],
+        output='screen',
+    )
+
+
+def add_ism330_imu_node():
+    config_file = PathJoinSubstitution(
+        [
+            FindPackageShare('hardware'),
+            'config',
+            'imu_default.yaml',
+        ]
+    )
+    return Node(
+        executable='imu_node',
+        package='hardware',
+        name='imu',
+        parameters=[config_file],
+        output='screen',
+        condition=IfCondition(
+            PythonExpression(
+                ["'", LaunchConfiguration('imu_source'), "' == 'ism330'"]
+            )
+        ),
+    )
+
+
+def add_pixhawk_imu_node():
+    config_file = PathJoinSubstitution(
+        [
+            FindPackageShare('hardware'),
+            'config',
+            'pixhawk_imu_default.yaml',
+        ]
+    )
+    return Node(
+        executable='pixhawk_imu_node',
+        package='hardware',
+        name='pixhawk_imu',
+        parameters=[config_file],
+        output='screen',
+        condition=IfCondition(
+            PythonExpression(
+                ["'", LaunchConfiguration('imu_source'), "' == 'pixhawk'"]
+            )
+        ),
     )
 
 
@@ -82,6 +161,7 @@ def add_mavlink_routerd():
         # respan required because a FCU reboot will kill mavlink-routerd
         respawn=True,
         respawn_delay=5.0,
+        condition=IfCondition(LaunchConfiguration('use_pixhawk')),
     )
     return action
 
@@ -106,6 +186,9 @@ def generate_launch_description():
                 add_micro_xrce_agent(),
                 add_mavlink_routerd(),
                 add_nsh_node(),
+                add_barometer_node(),
+                add_ism330_imu_node(),
+                add_pixhawk_imu_node(),
             ],
             launch_configurations={'camera_name': 'vertical_camera'},
         ),

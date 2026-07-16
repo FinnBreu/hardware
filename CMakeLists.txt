@@ -32,6 +32,7 @@ find_package(rclcpp_components REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(px4_msgs REQUIRED)
 find_package(hippo_msgs REQUIRED)
 find_package(hippo_common REQUIRED)
 
@@ -87,7 +88,6 @@ set(exec_name barometer)
 add_executable(${exec_name}
   src/barometer/barometer_node.cpp
   src/barometer/barometer.cpp
-  src/barometer/barometer_params.cpp
 )
 target_link_libraries(${exec_name} ms5837)
 ament_target_dependencies(${exec_name}
@@ -97,6 +97,61 @@ ament_target_dependencies(${exec_name}
   hippo_msgs
   sensor_msgs
   std_srvs
+)
+install(TARGETS ${exec_name}
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+################################################################################
+# ism330 library
+################################################################################
+set(lib_name ism330)
+add_library(${lib_name} src/imu/ism330.cpp)
+target_include_directories(${lib_name}
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+ament_export_targets(${lib_name}Target HAS_LIBRARY_TARGET)
+install(TARGETS ${lib_name}
+  EXPORT ${lib_name}Target
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include
+)
+
+################################################################################
+# ism330 imu node
+################################################################################
+set(exec_name imu_node)
+add_executable(${exec_name}
+  src/imu/imu_node.cpp
+  src/imu/imu.cpp
+)
+target_link_libraries(${exec_name} ism330)
+ament_target_dependencies(${exec_name}
+  rclcpp
+  rclcpp_components
+  sensor_msgs
+)
+install(TARGETS ${exec_name}
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+################################################################################
+# pixhawk imu node
+################################################################################
+set(exec_name pixhawk_imu_node)
+add_executable(${exec_name}
+  src/imu/pixhawk_imu_node.cpp
+  src/imu/pixhawk_imu.cpp
+)
+ament_target_dependencies(${exec_name}
+  px4_msgs
+  rclcpp
+  rclcpp_components
+  sensor_msgs
 )
 install(TARGETS ${exec_name}
   DESTINATION lib/${PROJECT_NAME}
@@ -118,7 +173,7 @@ install(PROGRAMS
 # install shared resources
 ################################################################################
 install(
-  DIRECTORY launch
+  DIRECTORY config launch
   DESTINATION share/${PROJECT_NAME}
 )
 
