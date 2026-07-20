@@ -43,6 +43,12 @@ def declare_launch_args(launch_description: LaunchDescription):
         description='Launch Pixhawk/FCU serial bridge processes.',
     )
     launch_description.add_action(action)
+    action = DeclareLaunchArgument(
+        'camera_config_file',
+        default_value=config_file_path('hardware', 'ov9281.yaml'),
+        description='Path to the vertical camera configuration file.',
+    )
+    launch_description.add_action(action)
 
 
 def add_mixer_node():
@@ -65,6 +71,7 @@ def include_vertical_camera_node():
     args = LaunchArgsDict()
     args.add_vehicle_name_and_sim_time()
     args['camera_name'] = 'vertical_camera'
+    args['camera_config_file'] = LaunchConfiguration('camera_config_file')
     return IncludeLaunchDescription(source, launch_arguments=args.items())
 
 
