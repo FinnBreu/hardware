@@ -1,7 +1,7 @@
 /**:
   ros__parameters:
     input_topic: fmu/out/sensor_combined
-    output_topic: imu_pixh/data
+    output_topic: imu
     frame_id: imu_link
     accel_stddev: 0.05
     gyro_stddev: 0.005

@@ -20,7 +20,7 @@ class Imu : public rclcpp::Node {
     std::string i2c_bus{"/dev/i2c-1"};
     int i2c_address{0x6a};
     std::string frame_id{"imu_link"};
-    std::string topic{"imu/data"};
+    std::string topic{"imu"};
     double publish_rate_hz{104.0};
     double accel_range_g{4.0};
     double gyro_range_dps{500.0};

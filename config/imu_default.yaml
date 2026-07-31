@@ -3,7 +3,7 @@
     i2c_bus: /dev/i2c-6
     i2c_address: 0x6a
     frame_id: imu_link
-    topic: imu/data
+    topic: imu
     publish_rate_hz: 104.0
     accel_range_g: 4.0
     gyro_range_dps: 500.0

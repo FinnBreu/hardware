@@ -17,7 +17,7 @@ PixhawkImu::PixhawkImu(rclcpp::NodeOptions const& options)
     : rclcpp::Node("pixhawk_imu", options) {
   input_topic_ = declare_parameter<std::string>("input_topic",
                                                 "fmu/out/sensor_combined");
-  output_topic_ = declare_parameter<std::string>("output_topic", "imu/data");
+  output_topic_ = declare_parameter<std::string>("output_topic", "imu");
   frame_id_ = declare_parameter<std::string>("frame_id", "imu_link");
   accel_stddev_ = declare_parameter<double>("accel_stddev", 0.05);
   gyro_stddev_ = declare_parameter<double>("gyro_stddev", 0.005);
