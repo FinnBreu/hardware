@@ -21,7 +21,7 @@ constexpr uint8_t kRegCtrl2G = 0x11;
 constexpr uint8_t kRegCtrl3C = 0x12;
 constexpr uint8_t kRegOutxLG = 0x22;
 constexpr uint8_t kCtrl3BduAndAutoIncrement = 0x44;
-constexpr double kGravity = 9.80665;
+constexpr double kGravity = 9.81;
 
 int16_t MakeInt16(uint8_t low, uint8_t high) {
   return static_cast<int16_t>(static_cast<uint16_t>(low) |
