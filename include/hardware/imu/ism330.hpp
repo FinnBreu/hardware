@@ -34,6 +34,7 @@ class Ism330 {
   ~Ism330();
 
   void Open(const Config& config);
+  void Close();
   Sample Read();
   double configured_output_data_rate_hz() const {
     return configured_output_data_rate_hz_;

@@ -2,9 +2,8 @@
 
 #include <algorithm>
 #include <chrono>
-#include <stdexcept>
-
 #include <rclcpp_components/register_node_macro.hpp>
+#include <stdexcept>
 
 namespace {
 
@@ -17,23 +16,16 @@ namespace imu {
 
 Imu::Imu(rclcpp::NodeOptions const& options) : Node("imu", options) {
   InitParams();
-  sensor_.Open(SensorConfig());
   InitPublishers();
   InitTimers();
-
-  RCLCPP_INFO(
-      get_logger(),
-      "Configured ISM330 on %s at 0x%02x, WHO_AM_I=0x%02x, ODR=%.1f Hz",
-      params_.i2c_bus.c_str(), params_.i2c_address, sensor_.who_am_i(),
-      sensor_.configured_output_data_rate_hz());
 }
 
 void Imu::InitParams() {
   params_.i2c_bus = declare_parameter<std::string>("i2c_bus", params_.i2c_bus);
   params_.i2c_address =
       declare_parameter<int>("i2c_address", params_.i2c_address);
-  params_.frame_id = declare_parameter<std::string>("frame_id",
-                                                    params_.frame_id);
+  params_.frame_id =
+      declare_parameter<std::string>("frame_id", params_.frame_id);
   params_.topic = declare_parameter<std::string>("topic", params_.topic);
   params_.publish_rate_hz =
       declare_parameter<double>("publish_rate_hz", params_.publish_rate_hz);
@@ -64,12 +56,45 @@ void Imu::InitTimers() {
       [this]() { ReadAndPublish(); });
 }
 
+bool Imu::EnsureSensorInitialized() {
+  if (sensor_initialized_) {
+    return true;
+  }
+
+  try {
+    sensor_.Open(SensorConfig());
+  } catch (const std::exception& exception) {
+    if (!sensor_init_failure_logged_) {
+      RCLCPP_ERROR(
+          get_logger(), "Could not initialize ISM330 on %s at 0x%02x: %s",
+          params_.i2c_bus.c_str(), params_.i2c_address, exception.what());
+      sensor_init_failure_logged_ = true;
+    }
+    return false;
+  }
+
+  RCLCPP_INFO(
+      get_logger(),
+      "Initialized ISM330 on %s at 0x%02x, WHO_AM_I=0x%02x, ODR=%.1f Hz",
+      params_.i2c_bus.c_str(), params_.i2c_address, sensor_.who_am_i(),
+      sensor_.configured_output_data_rate_hz());
+  sensor_initialized_ = true;
+  sensor_init_failure_logged_ = false;
+  return true;
+}
+
 void Imu::ReadAndPublish() {
+  if (!EnsureSensorInitialized()) {
+    return;
+  }
+
   try {
     imu_pub_->publish(BuildImuMsg(sensor_.Read()));
   } catch (const std::exception& exception) {
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
                          "Failed to read ISM330 sample: %s", exception.what());
+    sensor_initialized_ = false;
+    sensor_init_failure_logged_ = false;
   }
 }
 

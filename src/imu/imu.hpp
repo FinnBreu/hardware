@@ -1,10 +1,9 @@
 #pragma once
 
-#include <string>
-#include <vector>
-
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <string>
+#include <vector>
 
 #include "hardware/imu/ism330.hpp"
 
@@ -33,6 +32,7 @@ class Imu : public rclcpp::Node {
   void InitParams();
   void InitPublishers();
   void InitTimers();
+  bool EnsureSensorInitialized();
   void ReadAndPublish();
   sensor_msgs::msg::Imu BuildImuMsg(const Ism330::Sample& sample) const;
   Ism330::Config SensorConfig() const;
@@ -41,6 +41,8 @@ class Imu : public rclcpp::Node {
   rclcpp::TimerBase::SharedPtr timer_;
 
   Ism330 sensor_;
+  bool sensor_initialized_{false};
+  bool sensor_init_failure_logged_{false};
   Params params_;
 };
 

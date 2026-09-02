@@ -42,6 +42,7 @@ class MS5837 {
   typedef oversampling_s::osr_e Oversampling;
   enum class Status { kOk = 0, kCrcError, kIOError, kResetError };
   MS5837();
+  ~MS5837();
   static constexpr uint8_t kAddress = 0x76;
   static constexpr uint8_t kRegisterReset = 0x1E;
   static constexpr uint8_t kRegisterAdcRead = 0x00;
@@ -50,6 +51,7 @@ class MS5837 {
   static constexpr uint8_t kRegisterConvertTemperature = 0x50;
 
   bool Open(std::string _device_name = "/dev/i2c-1");
+  void Close();
   Status Init();
   bool Reset();
   Status Read(Oversampling oversampling);
@@ -80,7 +82,7 @@ class MS5837 {
   void HighTemperatureCompensation(Compensation &_compensation);
   void SecondOrderCompensation(Compensation &_compensation);
   std::string device_name_;
-  int file_handle_;
+  int file_handle_{-1};
 
   double pressure_;
   double temperature_;

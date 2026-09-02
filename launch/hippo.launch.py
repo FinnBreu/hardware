@@ -44,6 +44,13 @@ def declare_launch_args(launch_description: LaunchDescription):
     )
     launch_description.add_action(action)
     action = DeclareLaunchArgument(
+        'use_camera',
+        default_value='true',
+        choices=['true', 'false'],
+        description='Launch the vertical camera.',
+    )
+    launch_description.add_action(action)
+    action = DeclareLaunchArgument(
         'camera_config_file',
         default_value=config_file_path('hardware', 'ov9281.yaml'),
         description='Path to the vertical camera configuration file.',
@@ -72,7 +79,11 @@ def include_vertical_camera_node():
     args.add_vehicle_name_and_sim_time()
     args['camera_name'] = 'vertical_camera'
     args['camera_config_file'] = LaunchConfiguration('camera_config_file')
-    return IncludeLaunchDescription(source, launch_arguments=args.items())
+    return IncludeLaunchDescription(
+        source,
+        launch_arguments=args.items(),
+        condition=IfCondition(LaunchConfiguration('use_camera')),
+    )
 
 
 def add_micro_xrce_agent():

@@ -17,13 +17,31 @@
 
 #include "barometer.hpp"
 
+namespace {
+
+const char *StatusName(hardware::barometer::MS5837::Status status) {
+  using Status = hardware::barometer::MS5837::Status;
+  switch (status) {
+    case Status::kOk:
+      return "ok";
+    case Status::kCrcError:
+      return "CRC error";
+    case Status::kIOError:
+      return "I/O error";
+    case Status::kResetError:
+      return "reset error";
+  }
+  return "unknown error";
+}
+
+}  // namespace
+
 namespace hardware {
 namespace barometer {
 Barometer::Barometer(rclcpp::NodeOptions const &_options)
     : Node("barometer", _options) {
   InitParams();
   InitPublishers();
-  barometer_.Open(params_.device);
   InitTimers();
 }
 
@@ -52,25 +70,52 @@ void Barometer::InitTimers() {
       [this]() { OnReadTimer(); });
 }
 
-void Barometer::OnReadTimer() {
-  if (!barometer_initialized_) {
-    MS5837::Status status = barometer_.Init();
-    if (status != MS5837::Status::kOk) {
-      RCLCPP_ERROR_THROTTLE(
-          get_logger(), *get_clock(), 2000,
-          "Could not initialize barometer [%s]. Return Code: %d",
-          params_.device.c_str(), static_cast<int>(status));
-      return;
+bool Barometer::EnsureBarometerInitialized() {
+  if (barometer_initialized_) {
+    return true;
+  }
+
+  if (!barometer_opened_) {
+    barometer_opened_ = barometer_.Open(params_.device);
+    if (!barometer_opened_) {
+      LogBarometerInitFailureOnce("failed to open I2C device");
+      return false;
     }
-    RCLCPP_INFO(get_logger(), "Initialized barometer [%s]",
-                params_.device.c_str());
-    barometer_initialized_ = true;
+  }
+
+  MS5837::Status status = barometer_.Init();
+  if (status != MS5837::Status::kOk) {
+    LogBarometerInitFailureOnce(StatusName(status));
+    return false;
+  }
+
+  RCLCPP_INFO(get_logger(), "Initialized MS5837 on %s", params_.device.c_str());
+  barometer_initialized_ = true;
+  barometer_init_failure_logged_ = false;
+  return true;
+}
+
+void Barometer::LogBarometerInitFailureOnce(const char *reason) {
+  if (barometer_init_failure_logged_) {
+    return;
+  }
+  RCLCPP_ERROR(get_logger(), "Could not initialize MS5837 on %s: %s",
+               params_.device.c_str(), reason);
+  barometer_init_failure_logged_ = true;
+}
+
+void Barometer::OnReadTimer() {
+  if (!EnsureBarometerInitialized()) {
+    return;
   }
 
   MS5837::Status status = barometer_.Read(MS5837::Oversampling::k8192);
   if (status != MS5837::Status::kOk) {
-    RCLCPP_ERROR(get_logger(), "Failed to read sensor.");
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                         "Failed to read MS5837 sample: %s",
+                         StatusName(status));
     barometer_initialized_ = false;
+    barometer_init_failure_logged_ = false;
     return;
   }
   const rclcpp::Time t_now = now();
@@ -99,7 +144,7 @@ void Barometer::PublishTemperature(const rclcpp::Time &_now,
   msg.temperature = _temperature;
   if (!temperature_pub_) {
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
-                         "Pressure publisher not created!");
+                         "Temperature publisher not created!");
     return;
   }
   temperature_pub_->publish(msg);

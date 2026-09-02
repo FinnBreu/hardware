@@ -37,13 +37,17 @@ std::string ErrnoMessage(const std::string& action) {
 namespace hardware {
 namespace imu {
 
-Ism330::~Ism330() {
+Ism330::~Ism330() { Close(); }
+
+void Ism330::Close() {
   if (file_descriptor_ >= 0) {
     close(file_descriptor_);
+    file_descriptor_ = -1;
   }
 }
 
 void Ism330::Open(const Config& config) {
+  Close();
   config_ = config;
   file_descriptor_ = open(config_.i2c_bus.c_str(), O_RDWR);
   if (file_descriptor_ < 0) {
@@ -197,10 +201,9 @@ double Ism330::GyroScale(double range_dps) const {
 }
 
 bool Ism330::IsExpectedDevice(uint8_t who_am_i) const {
-  return std::find(config_.expected_who_am_i.begin(),
-                   config_.expected_who_am_i.end(),
-                   static_cast<int64_t>(who_am_i)) !=
-         config_.expected_who_am_i.end();
+  return std::find(
+             config_.expected_who_am_i.begin(), config_.expected_who_am_i.end(),
+             static_cast<int64_t>(who_am_i)) != config_.expected_who_am_i.end();
 }
 
 }  // namespace imu

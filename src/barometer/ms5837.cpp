@@ -20,6 +20,7 @@
 #include <linux/i2c-dev.h>
 #include <linux/i2c.h>
 #include <sys/ioctl.h>
+#include <unistd.h>
 
 #include <chrono>
 #include <thread>
@@ -31,13 +32,23 @@ namespace barometer {
 
 MS5837::MS5837() {}
 
+MS5837::~MS5837() { Close(); }
+
 bool MS5837::Open(std::string _device_name) {
+  Close();
   device_name_ = _device_name;
   file_handle_ = open(device_name_.c_str(), O_RDWR);
   if (file_handle_ < 0) {
     return false;
   }
   return true;
+}
+
+void MS5837::Close() {
+  if (file_handle_ >= 0) {
+    close(file_handle_);
+    file_handle_ = -1;
+  }
 }
 
 MS5837::Status MS5837::Init() {

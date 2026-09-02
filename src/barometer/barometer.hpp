@@ -36,6 +36,8 @@ class Barometer : public rclcpp::Node {
   void InitPublishers();
   void InitTimers();
   void InitParams();
+  bool EnsureBarometerInitialized();
+  void LogBarometerInitFailureOnce(const char *reason);
   void OnReadTimer();
   void PublishPressure(const rclcpp::Time &_now, double _pressure);
   void PublishTemperature(const rclcpp::Time &_now, double _temperature);
@@ -46,7 +48,9 @@ class Barometer : public rclcpp::Node {
   rclcpp::TimerBase::SharedPtr read_timer_;
 
   MS5837 barometer_;
+  bool barometer_opened_{false};
   bool barometer_initialized_{false};
+  bool barometer_init_failure_logged_{false};
   Params params_;
 };
 
