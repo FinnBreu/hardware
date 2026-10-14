@@ -23,12 +23,6 @@ def declare_launch_args(launch_description: LaunchDescription):
     declare_vehicle_name_and_sim_time(
         launch_description=launch_description, use_sim_time_default='false'
     )
-    pkg = 'hippo_control'
-    config_file = config_file_path(
-        pkg, 'actuator_mixer/hippocampus_normalized_default.yaml'
-    )
-    action = DeclareLaunchArgument('mixer_path', default_value=config_file)
-    launch_description.add_action(action)
     action = DeclareLaunchArgument(
         'imu_source',
         default_value='ism330',
@@ -56,20 +50,6 @@ def declare_launch_args(launch_description: LaunchDescription):
         description='Path to the vertical camera configuration file.',
     )
     launch_description.add_action(action)
-
-
-def add_mixer_node():
-    args = LaunchArgsDict()
-    args.add_vehicle_name_and_sim_time()
-    return Node(
-        package='hippo_control',
-        executable='actuator_mixer_node',
-        parameters=[
-            args,
-            LaunchConfiguration('mixer_path'),
-        ],
-        output='screen',
-    )
 
 
 def include_vertical_camera_node():
@@ -200,7 +180,6 @@ def generate_launch_description():
             [
                 PushROSNamespace(LaunchConfiguration('vehicle_name')),
                 add_esc_commander(),
-                add_mixer_node(),
                 add_micro_xrce_agent(),
                 add_mavlink_routerd(),
                 add_nsh_node(),
